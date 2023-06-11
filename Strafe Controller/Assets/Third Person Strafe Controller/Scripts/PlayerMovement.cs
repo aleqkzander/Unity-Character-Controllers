@@ -3,26 +3,21 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 
+[RequireComponent(typeof(PlayerStatistic))]
 public class PlayerMovement : MonoBehaviour
 {
     private Animator animator;
     private CharacterController controller;
+    private PlayerStatistic playerStatistic;
     private Vector2 input;
     private Vector3 rootMotion;
     private Vector3 velocity;
-
-    public float playerSpeed = 1.0f;
-    public float jumpHeigth = 3.0f;
-    public float gravity = 20.0f;
-    public float stepDown = 0.2f;
-    public float airControl = 0.5f;
-    public float jumpDamp = 0.5f;
-    public bool isJumping;
 
     private void Awake()
     {
         animator = GetComponentInChildren<Animator>();
         controller = GetComponentInChildren<CharacterController>();
+        playerStatistic = GetComponentInChildren<PlayerStatistic>();
     }
 
     private void Update()
@@ -30,8 +25,8 @@ public class PlayerMovement : MonoBehaviour
         input = new(Input.GetAxis("Horizontal"), Input.GetAxis("Vertical"));
         animator.SetFloat("InputX", input.x);
         animator.SetFloat("InputY", input.y);
-        animator.SetBool("IsJumping", isJumping);
-        animator.SetFloat("MotionSpeed", playerSpeed);
+        animator.SetBool("IsJumping", playerStatistic.isJumping);
+        animator.SetFloat("MotionSpeed", playerStatistic.playerSpeed);
 
         if (Input.GetKeyDown(KeyCode.Space)) Jump();
     }
@@ -43,45 +38,71 @@ public class PlayerMovement : MonoBehaviour
 
     private void LateUpdate()
     {
-        if (isJumping)
+        if (playerStatistic.isJumping)
         {
-            velocity.y -= gravity * Time.deltaTime;
-
-            Vector3 displacement = velocity * Time.deltaTime;
-            displacement += CalculateAirControl();
-            controller.Move(displacement);
-
-            //controller.Move(velocity * Time.deltaTime);
-            isJumping = !controller.isGrounded;
-            rootMotion = Vector3.zero;
+            UpdateInAir();
         }
 
         else
         {
-            controller.Move((rootMotion*playerSpeed) + Vector3.down * stepDown);
-            rootMotion = Vector3.zero;
-
-            if (controller.isGrounded) return;
-
-            // When falling
-            isJumping = true;
-            velocity = animator.velocity * jumpDamp * playerSpeed;
-            velocity.y = 0;
+            UpdateOnGround();
         }
+    }
+
+    /// <summary>
+    /// Move in air
+    /// </summary>
+    private void UpdateInAir()
+    {
+        velocity.y -= playerStatistic.gravity * Time.deltaTime;
+        Vector3 displacement = velocity * Time.deltaTime;
+        displacement += CalculateAirControl();
+        controller.Move(displacement);
+        playerStatistic.isJumping = !controller.isGrounded;
+        rootMotion = Vector3.zero;
+    }
+
+
+    /// <summary>
+    /// Move on ground
+    /// </summary>
+    private void UpdateOnGround()
+    {
+        Vector3 stepForwardAmount = rootMotion * playerStatistic.playerSpeed;
+        Vector3 stepDownAmount = Vector3.down * playerStatistic.stepDown;
+
+        controller.Move(stepForwardAmount + stepDownAmount);
+        rootMotion = Vector3.zero;
+
+        if (controller.isGrounded) return;
+        // When falling
+        SetInAir(0);
     }
 
     Vector3 CalculateAirControl()
     {
-        return (((transform.forward * input.y) + (transform.right * input.x)) * (airControl / 100)); 
+        return (((transform.forward * input.y) + (transform.right * input.x)) * (playerStatistic.airControl / 100)); 
     }
 
+    /// <summary>
+    /// On jump press
+    /// </summary>
     private void Jump()
     {
-        if (isJumping) return;
+        if (playerStatistic.isJumping) return;
+        float jumpVelocity = Mathf.Sqrt(2 * playerStatistic.gravity * playerStatistic.jumpHeigth);
+        SetInAir(jumpVelocity);
+    }
 
-        isJumping = true;
-        velocity = animator.velocity * jumpDamp * playerSpeed;
-        float jumpVelocity = Mathf.Sqrt(2 * gravity * jumpHeigth);
+
+    /// <summary>
+    /// Call on jumping
+    /// </summary>
+    /// <param name="jumpVelocity"></param>
+    private void SetInAir(float jumpVelocity)
+    {
+        playerStatistic.isJumping = true;
+        velocity = playerStatistic.jumpDamp * playerStatistic.playerSpeed * animator.velocity;
         velocity.y = jumpVelocity;
     }
 }
